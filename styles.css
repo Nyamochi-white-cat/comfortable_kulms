@@ -1,0 +1,684 @@
+/* Comfortable KULMS Styles */
+
+/* === 緊急度カラー CSS変数 === */
+:root {
+  --kulms-color-danger: #e85555;
+  --kulms-color-warning: #d7aa57;
+  --kulms-color-success: #62b665;
+  --kulms-color-other: #777777;
+}
+
+/* ===============================================
+   時間割テーブル
+   =============================================== */
+
+.kulms-timetable-wrapper {
+  padding: 4px 8px 8px;
+  overflow-x: auto;
+}
+
+.kulms-timetable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 曜日ヘッダー */
+.kulms-tt-day-header {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 2px;
+  color: #fff;
+  background: #3a5a8c;
+  border: 1px solid #2c4a74;
+}
+
+/* 左上コーナーセル */
+.kulms-tt-corner {
+  width: 24px;
+  min-width: 24px;
+  background: #3a5a8c;
+  border: 1px solid #2c4a74;
+}
+
+/* 時限ヘッダー */
+.kulms-tt-period-header {
+  text-align: center;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 2px;
+  color: #fff;
+  background: #4a6a9c;
+  border: 1px solid #3a5a8c;
+  width: 24px;
+  min-width: 24px;
+}
+
+/* セル */
+.kulms-tt-cell {
+  border: 1px solid #ccd4de;
+  padding: 0;
+  vertical-align: top;
+  height: 60px;
+  min-height: 60px;
+  background: #fafbfc;
+  transition: background-color 0.2s ease;
+}
+
+.kulms-tt-cell:hover {
+  background: #f0f4f8;
+}
+
+/* 連続コマセル（rowspan=2以上） — 高さはJSで動的設定 */
+.kulms-tt-cell-multi {
+  vertical-align: top;
+}
+
+.kulms-tt-cell-multi .kulms-tt-course-name {
+  -webkit-line-clamp: 8;
+}
+
+/* ===============================================
+   セル内コンテンツ
+   =============================================== */
+
+.kulms-tt-course {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4px 3px;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 3px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  position: relative;
+}
+
+/* 科目名リンク */
+.kulms-tt-course-name {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #1a3a5c;
+  text-decoration: none;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-right: 2px;
+}
+
+.kulms-tt-course-name:hover {
+  color: #0d47a1;
+  text-decoration: underline;
+}
+
+.kulms-tt-course-name.is-open {
+  color: #0d47a1;
+  text-decoration: underline;
+}
+
+.kulms-tt-course-name:focus-visible {
+  outline: 2px solid #3a5a8c;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ===============================================
+   緊急度色分け（セル背景）
+   =============================================== */
+
+.kulms-tt-course.kulms-tt-urgency-danger {
+  background: color-mix(in srgb, var(--kulms-color-danger) 22%, #fff);
+  border-left: 3px solid var(--kulms-color-danger);
+}
+
+.kulms-tt-course.kulms-tt-urgency-warning {
+  background: color-mix(in srgb, var(--kulms-color-warning) 22%, #fff);
+  border-left: 3px solid var(--kulms-color-warning);
+}
+
+.kulms-tt-course.kulms-tt-urgency-success {
+  background: color-mix(in srgb, var(--kulms-color-success) 18%, #fff);
+  border-left: 3px solid var(--kulms-color-success);
+}
+
+.kulms-tt-course.kulms-tt-urgency-other {
+  background: color-mix(in srgb, var(--kulms-color-other) 10%, #fff);
+  border-left: 3px solid var(--kulms-color-other);
+}
+
+/* ===============================================
+   プルダウンメニュー
+   =============================================== */
+
+.kulms-tt-dropdown {
+  position: fixed;
+  z-index: 200000;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  min-width: 180px;
+  max-width: 280px;
+  padding: 4px 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  animation: kulms-dd-fadein 0.12s ease;
+}
+
+@keyframes kulms-dd-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.kulms-tt-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  color: #333;
+  text-decoration: none;
+  font-size: 13px;
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+}
+
+.kulms-tt-dropdown-item:hover {
+  background: #f0f4f8;
+  color: #1a3a5c;
+  text-decoration: none;
+}
+
+.kulms-tt-dropdown-item i {
+  font-size: 14px;
+  color: #6a7a8a;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.kulms-tt-dropdown-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===============================================
+   「その他」セクション（時限なし科目）
+   =============================================== */
+
+.kulms-tt-other-section {
+  padding: 8px 8px 4px;
+}
+
+.kulms-tt-other-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin: 0 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #ddd;
+}
+
+.kulms-tt-other-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kulms-tt-other-item {
+  margin-bottom: 3px;
+}
+
+.kulms-tt-other-item .kulms-tt-course {
+  padding: 6px 8px;
+  border: 1px solid #dde;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+/* ===============================================
+   時間割下部: 課題パネル
+   =============================================== */
+
+.kulms-timetable-assign-panel {
+  margin: 10px 8px 8px;
+  border: 1px solid #d4dce6;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.kulms-timetable-assign-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e7edf5;
+  background: #f7fafc;
+}
+
+.kulms-timetable-assign-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #244466;
+}
+
+.kulms-timetable-assign-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kulms-timetable-assign-cache {
+  font-size: 11px;
+  color: #6e7d90;
+}
+
+.kulms-timetable-assign-refresh {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #466487;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.kulms-timetable-assign-refresh:hover {
+  background: rgba(58, 90, 140, 0.12);
+}
+
+.kulms-timetable-assign-body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.kulms-assign-empty-lite {
+  color: #76879a;
+  font-size: 12px;
+  padding: 10px 2px;
+}
+
+.kulms-assign-section-lite {
+  margin-bottom: 8px;
+}
+
+.kulms-assign-section-header-lite {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.kulms-assign-section-overdue {
+  border-left: 4px solid #b71c1c;
+  background: #e8b0b0;
+  color: #5c0e0e;
+}
+
+.kulms-assign-section-danger {
+  border-left: 4px solid var(--kulms-color-danger);
+  background: #f1cdcd;
+  color: #8b2020;
+}
+
+.kulms-assign-section-warning {
+  border-left: 4px solid var(--kulms-color-warning);
+  background: #e2d4bf;
+  color: #6b4f1a;
+}
+
+.kulms-assign-section-success {
+  border-left: 4px solid var(--kulms-color-success);
+  background: #cce6cf;
+  color: #1e5e20;
+}
+
+.kulms-assign-section-other {
+  border-left: 4px solid var(--kulms-color-other);
+  background: #e0e0e0;
+  color: #444;
+}
+
+.kulms-assign-section-completed {
+  border-left: 4px solid #6582ff;
+  background: #c6d1fc;
+  color: #2a3d8f;
+}
+
+.kulms-assign-section-items-lite {
+  display: grid;
+  gap: 4px;
+}
+
+.kulms-assign-card-lite {
+  background: #fff;
+  border: 1px solid #cfd9e5;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.kulms-assign-main-lite {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.kulms-assign-content-lite {
+  min-width: 0;
+  flex: 1;
+}
+
+.kulms-assign-checkbox-lite {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #9aaac0;
+  border-radius: 4px;
+  background: #fff;
+  margin-top: 2px;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.kulms-assign-checkbox-lite:hover {
+  border-color: #5f7ea2;
+  background: #eef3f9;
+}
+
+.kulms-assign-checkbox-lite:focus-visible {
+  outline: 2px solid #3a5a8c;
+  outline-offset: 1px;
+}
+
+.kulms-assign-checkbox-lite.checked {
+  border-color: #4e69d1;
+  background: #4e69d1;
+}
+
+.kulms-assign-checkbox-lite.checked::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  left: 5px;
+  top: 2px;
+  transform: rotate(45deg);
+}
+
+.kulms-assign-checkbox-lite.active {
+  border-color: #ec8f1d;
+  background: #fff7ea;
+}
+
+.kulms-assign-checkbox-lite.active::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  left: 4px;
+  top: 4px;
+  background: #ec8f1d;
+}
+
+.kulms-assign-card-lite.urgency-danger,
+.kulms-assign-card-lite.urgency-overdue {
+  border-color: var(--kulms-color-danger);
+}
+
+.kulms-assign-card-lite.urgency-warning {
+  border-color: var(--kulms-color-warning);
+}
+
+.kulms-assign-card-lite.urgency-success {
+  border-color: var(--kulms-color-success);
+}
+
+.kulms-assign-card-lite.urgency-other {
+  border-color: var(--kulms-color-other);
+}
+
+.kulms-assign-card-lite.completed {
+  border-color: #6582ff;
+  opacity: 0.72;
+}
+
+.kulms-assign-card-lite.resubmit-active {
+  border-color: #ec8f1d;
+}
+
+.kulms-assign-badge-row-lite {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.kulms-assign-course-pill-lite {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kulms-assign-course-pill-lite.urgency-danger,
+.kulms-assign-course-pill-lite.urgency-overdue {
+  background: var(--kulms-color-danger);
+}
+
+.kulms-assign-course-pill-lite.urgency-warning {
+  background: var(--kulms-color-warning);
+}
+
+.kulms-assign-course-pill-lite.urgency-success {
+  background: var(--kulms-color-success);
+}
+
+.kulms-assign-course-pill-lite.urgency-other {
+  background: var(--kulms-color-other);
+}
+
+.kulms-assign-type-badge-lite {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.kulms-assign-resubmit-badge-lite {
+  background: #fff4e5;
+  color: #9a5b00;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.kulms-assign-name-lite {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-bottom: 2px;
+}
+
+.kulms-assign-name-lite a {
+  color: #1565c0;
+  text-decoration: none;
+}
+
+.kulms-assign-name-lite a:hover {
+  text-decoration: underline;
+}
+
+.kulms-assign-meta-lite {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: #7a8b9f;
+}
+
+.kulms-assign-remain-lite {
+  font-weight: 700;
+  color: #36495f;
+}
+
+.kulms-assign-remain-lite.overdue {
+  color: #e85555;
+}
+
+.kulms-tt-other-item .kulms-tt-course:hover {
+  background: #f0f4f8;
+}
+
+/* ===============================================
+   サイドバーリサイズハンドル
+   =============================================== */
+
+.kulms-sidebar-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1000;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+
+.kulms-sidebar-handle:hover {
+  background-color: rgba(100, 130, 180, 0.35);
+}
+
+.kulms-sidebar-handle:active {
+  background-color: rgba(70, 100, 160, 0.5);
+}
+
+body.kulms-sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+body.kulms-sidebar-resizing * {
+  cursor: col-resize !important;
+}
+
+body.kulms-sidebar-resizing iframe {
+  pointer-events: none !important;
+}
+
+/* ===============================================
+   ツール表示管理（tool-visibility.js 用）
+   =============================================== */
+
+.kulms-hidden-tool {
+  display: none !important;
+}
+
+.kulms-other-toggle {
+  padding: 0 !important;
+}
+
+.kulms-other-btn {
+  font-size: 12px !important;
+  color: #888 !important;
+  padding: 4px 16px !important;
+  width: 100% !important;
+  text-align: left !important;
+}
+
+.kulms-other-btn:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.kulms-tool-toggle {
+  border: none !important;
+  background: transparent !important;
+  font-size: 14px !important;
+  color: #aaa !important;
+  cursor: pointer !important;
+  padding: 0 4px !important;
+  line-height: 1 !important;
+  margin-left: 6px !important;
+  opacity: 0 !important;
+  transition: opacity 0.15s !important;
+}
+
+.nav-item:hover .kulms-tool-toggle {
+  opacity: 1 !important;
+}
+
+.kulms-tool-toggle:hover {
+  color: #333 !important;
+}
+
+/* ===============================================
+   授業中ハイライト バッジ
+   =============================================== */
+
+.kulms-now-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  background: #e85555;
+  color: #fff;
+  vertical-align: middle;
+  line-height: 1.3;
+}
+
+.kulms-now-badge.is-next {
+  background: #4a8fd4;
+}
+
+/* ===============================================
+   セクション見出しスタイル上書き
+   =============================================== */
+
+.sites-section-heading {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #555 !important;
+  padding: 8px 12px 4px !important;
+}
+
+/* pinned セクション内の元のリストを非表示にする（時間割で置換後） */
+.pinned-site-section .kulms-timetable-wrapper ~ #pinned-site-list {
+  display: none !important;
+}
