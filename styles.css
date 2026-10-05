@@ -57,6 +57,7 @@
   color: #fff;
   background: #4a6a9c;
   border: 1px solid #3a5a8c;
+  border-right-color: #ccd4de;
   width: 24px;
   min-width: 24px;
 }
