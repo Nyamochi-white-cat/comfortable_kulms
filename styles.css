@@ -57,7 +57,6 @@
   color: #fff;
   background: #4a6a9c;
   border: 1px solid #3a5a8c;
-  border-right-color: #ccd4de;
   width: 24px;
   min-width: 24px;
 }
@@ -71,6 +70,10 @@
   box-sizing: border-box;
   background: #fafbfc;
   transition: background-color 0.2s ease;
+}
+
+.kulms-tt-cell[data-day="月"] {
+  border-left-color: #3a5a8c;
 }
 
 .kulms-tt-cell:hover {
