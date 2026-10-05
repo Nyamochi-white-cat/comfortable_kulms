@@ -1,19 +1,22 @@
 {
   "extName": {
-    "message": "KULMS+"
+    "message": "comfortable kulms"
   },
   "extDescription": {
     "message": "京都大学LMS (KULMS) を強化するChrome拡張。全科目の課題一覧・締切管理、教科書情報取得、サイドバーカスタマイズなど。"
   },
 
   "panelTitle": {
-    "message": "KULMS+"
+    "message": "comfortable kulms"
   },
   "tabAssignments": {
     "message": "課題"
   },
   "timetableHeading": {
     "message": "時間割"
+  },
+  "timetableSyllabus": {
+    "message": "シラバス"
   },
   "tabTextbooks": {
     "message": "教科書"

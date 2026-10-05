@@ -1,19 +1,22 @@
 {
   "extName": {
-    "message": "KULMS+"
+    "message": "comfortable kulms"
   },
   "extDescription": {
     "message": "Enhance Kyoto University LMS with assignment tracking, deadline alerts, textbook info & more."
   },
 
   "panelTitle": {
-    "message": "KULMS+"
+    "message": "comfortable kulms"
   },
   "tabAssignments": {
     "message": "Tasks"
   },
   "timetableHeading": {
     "message": "Timetable"
+  },
+  "timetableSyllabus": {
+    "message": "Syllabus"
   },
   "tabTextbooks": {
     "message": "Textbooks"

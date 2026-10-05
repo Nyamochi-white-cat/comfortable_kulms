@@ -1,7 +1,7 @@
 // === Comfortable KULMS - 時間割グリッド ===
 // サイドバーの「ピン留め」セクションを曜日×時限の時間割テーブルに置換する
 // 連続コマ (2-5コマ) の授業は rowspan で結合表示する
-// 二段階レンダリング: 即時表示(spans=1) → KULASIS結果反映後に再描画
+// 二段階レンダリング: 即時表示 → KULASISの全スロット反映後に必要なら再描画
 
 (function () {
   "use strict";
@@ -79,7 +79,6 @@
         href: href,
         toolListClone: toolListClone,
         // スケジュール情報（KULASIS から取得後に設定）
-        spans: 1,          // 何コマ分か（デフォルト1）
         allSlots: null,    // KULASISから取得した全スロット
       });
     });
@@ -153,41 +152,56 @@
   function mergeScheduleData(courses, schedules) {
     courses.forEach(function (course) {
       var schedule = schedules[course.fullName];
-      if (!schedule || !schedule.slots || schedule.slots.length === 0) return;
+      if (!schedule) return;
 
-      course.allSlots = schedule.slots;
+      // 元の科目名から曜時限が分かる場合は、その枠を含む結果だけ採用する。
+      if (course.day && course.period && schedule.slots && schedule.slots.length > 0 && !schedule.slots.some(function (slot) {
+        return slot.day === course.day && parseInt(slot.period, 10) === course.period;
+      })) return;
 
-      // この科目が登録されている曜日で、連続する時限数を計算
-      if (course.day) {
-        var daySlots = schedule.slots
-          .filter(function (slot) { return slot.day === course.day; })
-          .map(function (slot) { return slot.period; })
-          .sort(function (a, b) { return a - b; });
+      course.syllabusUrl = schedule.syllabusUrl || null;
+      if (!schedule.slots || schedule.slots.length === 0) return;
 
-        if (daySlots.length > 1 && daySlots[0] === course.period) {
-          // 連続しているか確認（5コマ連続まで対応）
-          var span = 1;
-          for (var slotIndex = 1; slotIndex < daySlots.length; slotIndex++) {
-            if (daySlots[slotIndex] === daySlots[slotIndex - 1] + 1) {
-              span++;
-            } else {
-              break;
-            }
-          }
-          course.spans = span;
-        }
-      }
+      course.allSlots = schedule.slots.slice();
     });
 
     console.log("[Comfortable KULMS] Schedule info merged:",
-      courses.filter(function (c) { return c.spans > 1; })
-        .map(function (c) { return c.shortName + " (" + c.spans + "コマ)"; })
-        .join(", ") || "連続コマなし"
-    );
+      courses.filter(function (c) { return Array.isArray(c.allSlots); }).length + " 科目");
+  }
+
+  function getCourseSlots(course) {
+    var sourceSlots = Array.isArray(course.allSlots)
+      ? course.allSlots
+      : [{ day: course.day, period: course.period }];
+    var seen = {};
+    var slots = [];
+
+    sourceSlots.forEach(function (slot) {
+      if (!slot || DAYS.indexOf(slot.day) === -1) return;
+      var period = parseInt(slot.period, 10);
+      if (PERIODS.indexOf(period) === -1) return;
+      var key = slot.day + ":" + period;
+      if (seen[key]) return;
+      seen[key] = true;
+      slots.push({ day: slot.day, period: period });
+    });
+    return slots;
+  }
+
+  function courseKey(course) {
+    return String(course.siteId || course.fullName);
+  }
+
+  function getPlacementSignature(courses) {
+    return courses.map(function (course) {
+      return courseKey(course) + "=" + getCourseSlots(course).map(function (slot) {
+        return slot.day + slot.period;
+      }).sort().join(",");
+    }).sort().join("|");
   }
 
   // ============================================================
-  // 時間割テーブル構築（rowspan対応、5コマ連続まで）
+  // 時間割テーブル構築（曜日ごとに同じ科目の連続枠を結合）
   // ============================================================
   function buildTimetable(courses) {
     var grid = {};
@@ -196,26 +210,39 @@
     DAYS.forEach(function (day) {
       grid[day] = {};
       PERIODS.forEach(function (p) {
-        grid[day][p] = { courses: [], skip: false };
+        grid[day][p] = { course: null, skip: false };
       });
     });
 
     courses.forEach(function (course) {
-      if (course.day && course.period && grid[course.day] && grid[course.day][course.period]) {
-        grid[course.day][course.period].courses.push(course);
-
-        // 2コマ以上の場合、後続時限をスキップ対象にマーク
-        if (course.spans > 1) {
-          for (var spanOffset = 1; spanOffset < course.spans; spanOffset++) {
-            var nextPeriod = course.period + spanOffset;
-            if (nextPeriod <= 5 && grid[course.day][nextPeriod]) {
-              grid[course.day][nextPeriod].skip = true;
-            }
-          }
-        }
-      } else {
+      var slots = getCourseSlots(course);
+      if (slots.length === 0) {
         otherCourses.push(course);
+        return;
       }
+
+      slots.forEach(function (slot) {
+        var cell = grid[slot.day][slot.period];
+        if (!cell.course || courseKey(cell.course) === courseKey(course)) {
+          cell.course = course;
+        }
+      });
+    });
+
+    // 同じ曜日で同じ科目が連続する枠だけ結合する。
+    DAYS.forEach(function (day) {
+      PERIODS.forEach(function (period, index) {
+        var cell = grid[day][period];
+        if (cell.skip || !cell.course) return;
+        var span = 1;
+        for (var nextIndex = index + 1; nextIndex < PERIODS.length; nextIndex++) {
+          var nextCell = grid[day][PERIODS[nextIndex]];
+          if (!nextCell.course || courseKey(cell.course) !== courseKey(nextCell.course)) break;
+          span++;
+          nextCell.skip = true;
+        }
+        cell.span = span;
+      });
     });
 
     // テーブル構築
@@ -260,22 +287,14 @@
         td.setAttribute("data-day", day);
         td.setAttribute("data-period", period);
 
-        if (cellInfo.courses.length > 0) {
-          var course = cellInfo.courses[0]; // 同じ枠の最初の科目
-
-          // rowspan 設定（2コマ〜5コマ対応）
-          if (course.spans > 1) {
-            td.setAttribute("rowspan", course.spans);
+        if (cellInfo.course) {
+          if (cellInfo.span > 1) {
+            td.setAttribute("rowspan", cellInfo.span);
             td.classList.add("kulms-tt-cell-multi");
-            // 動的に高さを設定（spans数に応じて）
-            // 1コマ = 60px + 1px border = 61px、n コマ = 60*n + (n-1) border + 1
-            td.style.height = (60 * course.spans + (course.spans - 1)) + "px";
-            td.style.minHeight = td.style.height;
           }
 
-          var cellContent = createCellContent(course);
-          td.appendChild(cellContent);
-          td.setAttribute("data-site-id", course.siteId);
+          td.appendChild(createCellContent(cellInfo.course));
+          td.setAttribute("data-site-id", cellInfo.course.siteId);
         }
 
         tr.appendChild(td);
@@ -735,23 +754,22 @@
 
     timetableInserted = true;
 
-    // ★ Phase 1: 即座に時間割を表示（spans=1、連続コマ情報なし）
+    // ★ Phase 1: 科目名から分かる曜日・時限を使って即座に表示
+    var initialPlacement = getPlacementSignature(courses);
     renderTimetable(pinnedSection, courses);
 
     console.log("[Comfortable KULMS] Phase 1: 時間割を即時表示 (" + courses.length + " 科目)");
 
-    // ★ Phase 2: KULASIS からスケジュール情報を取得し、連続コマがあれば再描画
+    // ★ Phase 2: KULASIS の全曜日・時限を反映し、配置が変わった場合に再描画
     try {
       courses = await fetchSchedulesFromKULASIS(courses);
 
-      var hasMultiSpan = courses.some(function (c) { return c.spans > 1; });
-      if (hasMultiSpan) {
-        // 連続コマが見つかったので時間割テーブルのみ差分更新（課題パネル保持）
+      if (getPlacementSignature(courses) !== initialPlacement) {
+        // 配置に変更があったため時間割だけ差分更新（課題パネル保持）
         updateTimetableGrid(pinnedSection, courses);
-        console.log("[Comfortable KULMS] Phase 2: 連続コマ反映で再描画 (" +
-          courses.filter(function (c) { return c.spans > 1; }).length + " 連続コマ)");
+        console.log("[Comfortable KULMS] Phase 2: 全スロット反映で再描画");
       } else {
-        console.log("[Comfortable KULMS] Phase 2: 連続コマなし、再描画スキップ");
+        console.log("[Comfortable KULMS] Phase 2: 配置変更なし、再描画スキップ");
       }
     } catch (e) {
       console.warn("[Comfortable KULMS] Phase 2 failed, using Phase 1 display:", e);

@@ -28,17 +28,15 @@
 
   // ドロップダウンメニューを構築
   // course オブジェクトから保持済みのサイドバー要素を優先的に使う
-  function buildDropdown(siteId, toolListSource) {
+  function buildDropdown(siteId, toolListSource, syllabusUrl) {
     // ★ 保持済みDOM → 現在のDOM検索の順でフォールバック
     var source = toolListSource || findToolList(siteId);
-    if (!source) return null;
-
-    var navItems = Array.from(source.querySelectorAll(":scope > .nav-item"));
+    var navItems = source ? Array.from(source.querySelectorAll(":scope > .nav-item")) : [];
     // kulms-extension が追加した補助要素は除外
     navItems = navItems.filter(function (li) {
       return !li.classList.contains("kulms-other-toggle");
     });
-    if (navItems.length === 0) return null;
+    if (navItems.length === 0 && !syllabusUrl) return null;
 
     var dropdown = document.createElement("div");
     dropdown.className = "kulms-tt-dropdown";
@@ -70,6 +68,23 @@
 
       dropdown.appendChild(itemLink);
     });
+
+    if (syllabusUrl) {
+      var syllabusLink = document.createElement("a");
+      syllabusLink.className = "kulms-tt-dropdown-item";
+      syllabusLink.href = syllabusUrl;
+      syllabusLink.setAttribute("role", "menuitem");
+
+      var syllabusIcon = document.createElement("i");
+      syllabusIcon.className = "fa fa-book";
+      syllabusLink.appendChild(syllabusIcon);
+
+      var syllabusLabel = document.createElement("span");
+      syllabusLabel.className = "kulms-tt-dropdown-label";
+      syllabusLabel.textContent = t("timetableSyllabus");
+      syllabusLink.appendChild(syllabusLabel);
+      dropdown.appendChild(syllabusLink);
+    }
 
     return dropdown;
   }
@@ -110,7 +125,7 @@
     closeDropdown();
 
     var toolListSource = course.toolListClone || null;
-    var dropdown = buildDropdown(course.siteId, toolListSource);
+    var dropdown = buildDropdown(course.siteId, toolListSource, course.syllabusUrl);
     if (!dropdown) return;
 
     dropdown.style.position = "fixed";

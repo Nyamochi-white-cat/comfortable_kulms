@@ -155,14 +155,14 @@
 
   // --- 課題ツールURL取得 ---
 
-  async function fetchAssignmentToolUrl(siteId) {
+  async function fetchSiteToolUrl(siteId, toolId) {
     try {
       var data = await sakaiGet("/direct/site/" + siteId + "/pages.json");
       var pages = Array.isArray(data) ? data : [];
       for (var i = 0; i < pages.length; i++) {
         var tools = pages[i].tools || [];
         for (var j = 0; j < tools.length; j++) {
-          if (tools[j].toolId === "sakai.assignment.grades") {
+          if (tools[j].toolId === toolId) {
             return BASE_URL + "/portal/site/" + siteId + "/tool/" + tools[j].id;
           }
         }
@@ -178,7 +178,7 @@
       var data = await sakaiGet("/direct/assignment/site/" + course.id + ".json");
       var list = data.assignment_collection || [];
 
-      var courseAssignUrl = await fetchAssignmentToolUrl(course.id)
+      var courseAssignUrl = await fetchSiteToolUrl(course.id, "sakai.assignment.grades")
         || BASE_URL + "/portal/site/" + course.id;
 
       var itemResults = await Promise.allSettled(
@@ -248,19 +248,52 @@
 
   // --- クイズ取得 ---
 
+  function metadataAlias(metadata) {
+    if (!metadata) return "";
+    if (Array.isArray(metadata)) {
+      for (var i = 0; i < metadata.length; i++) {
+        var item = metadata[i];
+        if (item && String(item.label || "").toUpperCase() === "ALIAS") {
+          return String(item.entry || item.value || "").trim();
+        }
+      }
+      return "";
+    }
+    if (typeof metadata === "object") {
+      return String(metadata.ALIAS || metadata.alias || "").trim();
+    }
+    return "";
+  }
+
+  function getQuizAlias(quiz) {
+    return String(
+      quiz.assessmentAlias || quiz.alias ||
+      metadataAlias(quiz.assessmentMetaDataMap) ||
+      metadataAlias(quiz.assessmentMetaDataSet) ||
+      metadataAlias(quiz.assessmentMetaData) || ""
+    ).trim();
+  }
+
   async function fetchQuizzesForCourse(course) {
     try {
       var data = await sakaiGet("/direct/sam_pub/context/" + course.id + ".json");
       var list = data.sam_pub_collection || [];
-      var quizUrl = BASE_URL + "/portal/site/" + course.id;
       var now = Date.now();
       list = list.filter(function (q) {
         var startTs = extractTimestamp(q.startDate);
         return !startTs || startTs <= now;
       });
+      var fallbackToolUrl = null;
+      if (list.some(function (q) { return !getQuizAlias(q); })) {
+        fallbackToolUrl = await fetchSiteToolUrl(course.id, "sakai.samigo");
+      }
       return list.map(function (q) {
         var deadline = extractTimestamp(q.dueDate);
         var closeTime = extractTimestamp(q.retractDate) || deadline;
+        var alias = getQuizAlias(q);
+        var quizUrl = alias
+          ? BASE_URL + "/samigo-app/servlet/Login?id=" + encodeURIComponent(alias)
+          : fallbackToolUrl;
         return {
           courseName: course.name,
           courseId: course.id,
@@ -425,12 +458,12 @@
   }
 
   function publishAssignments(assignments) {
-    lastAssignments = assignments;
-    migrateCheckedKeys(assignments);
-    window.__kulmsAssignments = assignments;
-    window.__kulmsCourseUrgency = computeCourseUrgency(assignments);
+    lastAssignments = sanitizeQuizOverviewUrls(assignments).assignments;
+    migrateCheckedKeys(lastAssignments);
+    window.__kulmsAssignments = lastAssignments;
+    window.__kulmsCourseUrgency = computeCourseUrgency(lastAssignments);
     if (window.__kulmsOnAssignmentsUpdated) {
-      window.__kulmsOnAssignmentsUpdated(assignments, window.__kulmsCourseUrgency);
+      window.__kulmsOnAssignmentsUpdated(lastAssignments, window.__kulmsCourseUrgency);
     }
   }
 
@@ -445,7 +478,7 @@
   async function loadCache() {
     return new Promise(function (resolve) {
       window.__kulmsSafeStorage.get(CACHE_KEY, function (result) {
-        var cached = result[CACHE_KEY];
+        var cached = sanitizeCachedQuizUrls(result[CACHE_KEY]);
         if (cached && cached.timestamp && Date.now() - cached.timestamp < getFetchIntervalMs()) {
           resolve(cached);
         } else {
@@ -458,9 +491,37 @@
   async function loadStaleCache() {
     return new Promise(function (resolve) {
       window.__kulmsSafeStorage.get(CACHE_KEY, function (result) {
-        resolve(result[CACHE_KEY] || null);
+        resolve(sanitizeCachedQuizUrls(result[CACHE_KEY]) || null);
       });
     });
+  }
+
+  function sanitizeCachedQuizUrls(cached) {
+    if (!cached || !Array.isArray(cached.assignments)) return cached;
+    var result = sanitizeQuizOverviewUrls(cached.assignments);
+    if (!result.changed) return cached;
+    // Make the regular fresh-cache path fetch again; loadStaleCache still keeps
+    // the sanitized entries available if that request fails.
+    var migrated = Object.assign({}, cached, { timestamp: 0, assignments: result.assignments });
+    window.__kulmsSafeStorage.set({ [CACHE_KEY]: migrated });
+    return migrated;
+  }
+
+  function sanitizeQuizOverviewUrls(assignments) {
+    var changed = false;
+    var sanitized = assignments.map(function (assignment) {
+      if (assignment.type !== "quiz" || !assignment.courseId || !assignment.url) return assignment;
+      try {
+        var url = new URL(assignment.url, BASE_URL);
+        var coursePath = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+        if (url.origin === BASE_URL && coursePath === "/portal/site/" + assignment.courseId) {
+          changed = true;
+          return Object.assign({}, assignment, { url: null });
+        }
+      } catch (e) { /* leave malformed legacy data untouched */ }
+      return assignment;
+    });
+    return { assignments: sanitized, changed: changed };
   }
 
   function saveCache(assignments) {

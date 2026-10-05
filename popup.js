@@ -13,6 +13,10 @@
   var settings = {};
   var overrideMessages = null;
   var sectionCollapsedState = {};
+  var MESSAGE_FALLBACKS = {
+    extName: "comfortable kulms",
+    panelTitle: "comfortable kulms",
+  };
 
   // --- i18n (same approach as settings.js) ---
 
@@ -31,7 +35,19 @@
       }
       return msg;
     }
-    return chrome.i18n.getMessage(key, substitutions) || key;
+    return chrome.i18n.getMessage(key, substitutions) || MESSAGE_FALLBACKS[key] || key;
+  }
+
+  function getAssignmentUrl(assignment) {
+    if (!assignment.url) return "";
+    if (assignment.type !== "quiz" || !assignment.courseId) return assignment.url;
+    try {
+      var url = new URL(assignment.url, LMS_URL);
+      var coursePath = decodeURIComponent(url.pathname).replace(/\/+$/, "");
+      return coursePath === "/portal/site/" + assignment.courseId ? "" : assignment.url;
+    } catch (e) {
+      return assignment.url;
+    }
   }
 
   function loadOverrideMessages(lang) {
@@ -248,13 +264,14 @@
     // Title
     var nameDiv = document.createElement("div");
     nameDiv.className = "card-name";
-    if (assignment.url) {
+    var assignmentUrl = getAssignmentUrl(assignment);
+    if (assignmentUrl) {
       var link = document.createElement("a");
-      link.href = assignment.url;
+      link.href = assignmentUrl;
       link.textContent = assignment.name;
       link.addEventListener("click", function (e) {
         e.preventDefault();
-        try { chrome.tabs.create({ url: assignment.url }); } catch (ex) { /* context invalidated */ }
+        try { chrome.tabs.create({ url: assignmentUrl }); } catch (ex) { /* context invalidated */ }
       });
       nameDiv.appendChild(link);
     } else {
