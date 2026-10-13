@@ -406,6 +406,11 @@
     return !!(api && api.isExplicitlyActive && api.isExplicitlyActive(item));
   }
 
+  function assignmentDomKey(item) {
+    if (item.entityId) return String(item.entityId);
+    return String(item.courseId || "") + ":" + String(item.name || "");
+  }
+
   function createAssignmentCard(item) {
     var urgency = panelItemUrgency(item);
     var isCompleted = panelIsCompleted(item);
@@ -423,6 +428,7 @@
     checkbox.type = "button";
     checkbox.className = "kulms-assign-checkbox-lite" + (isCompleted ? " checked" : "") + (isActive ? " active" : "");
     checkbox.setAttribute("aria-label", item.name || "assignment");
+    checkbox.setAttribute("data-assignment-key", assignmentDomKey(item));
     checkbox.title = t("sectionCompleted");
     checkbox.addEventListener("click", function (e) {
       e.preventDefault();
@@ -520,6 +526,24 @@
     var cacheInfo = panel.querySelector(".kulms-timetable-assign-cache");
     if (!body || !cacheInfo) return;
 
+    var previousScrollTop = body.scrollTop;
+    var activeElement = document.activeElement;
+    var focusedAssignmentKey = activeElement && body.contains(activeElement)
+      ? activeElement.getAttribute("data-assignment-key")
+      : null;
+
+    function restorePanelView() {
+      body.scrollTop = previousScrollTop;
+      if (!focusedAssignmentKey) return;
+      var checkboxes = body.querySelectorAll(".kulms-assign-checkbox-lite[data-assignment-key]");
+      for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].getAttribute("data-assignment-key") === focusedAssignmentKey) {
+          checkboxes[i].focus();
+          break;
+        }
+      }
+    }
+
     body.innerHTML = "";
 
     if (!assignments || assignments.length === 0) {
@@ -528,6 +552,7 @@
       empty.textContent = t("noAssignments");
       body.appendChild(empty);
       cacheInfo.textContent = "";
+      restorePanelView();
       return;
     }
 
@@ -590,6 +615,8 @@
       emptyAll.textContent = t("noAssignments");
       body.appendChild(emptyAll);
     }
+
+    restorePanelView();
   }
 
   function buildAssignmentsPanel() {

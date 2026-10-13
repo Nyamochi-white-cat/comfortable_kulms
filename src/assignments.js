@@ -155,10 +155,19 @@
 
   // --- 課題ツールURL取得 ---
 
-  async function fetchSiteToolUrl(siteId, toolId) {
+  function fetchSitePages(siteId, sitePagesCache) {
+    var key = String(siteId);
+    if (!sitePagesCache.has(key)) {
+      sitePagesCache.set(key, sakaiGet("/direct/site/" + siteId + "/pages.json")
+        .then(function (data) { return Array.isArray(data) ? data : []; })
+        .catch(function () { return []; }));
+    }
+    return sitePagesCache.get(key);
+  }
+
+  async function fetchSiteToolUrl(siteId, toolId, sitePagesCache) {
     try {
-      var data = await sakaiGet("/direct/site/" + siteId + "/pages.json");
-      var pages = Array.isArray(data) ? data : [];
+      var pages = await fetchSitePages(siteId, sitePagesCache);
       for (var i = 0; i < pages.length; i++) {
         var tools = pages[i].tools || [];
         for (var j = 0; j < tools.length; j++) {
@@ -173,19 +182,22 @@
 
   // --- 課題データ取得 ---
 
-  async function fetchAssignmentsForCourse(course) {
+  async function fetchAssignmentsForCourse(course, sitePagesCache) {
     try {
       var data = await sakaiGet("/direct/assignment/site/" + course.id + ".json");
       var list = data.assignment_collection || [];
+      if (list.length === 0) return [];
 
-      var courseAssignUrl = await fetchSiteToolUrl(course.id, "sakai.assignment.grades")
-        || BASE_URL + "/portal/site/" + course.id;
-
-      var itemResults = await Promise.allSettled(
+      // The tool URL and item details are independent after the assignment list arrives.
+      var courseAssignUrlPromise = fetchSiteToolUrl(course.id, "sakai.assignment.grades", sitePagesCache);
+      var itemResultsPromise = Promise.allSettled(
         list.map(function (a) {
           return sakaiGet("/direct/assignment/item/" + (a.entityId || a.id) + ".json");
         })
       );
+      var parallelResults = await Promise.all([courseAssignUrlPromise, itemResultsPromise]);
+      var courseAssignUrl = parallelResults[0] || BASE_URL + "/portal/site/" + course.id;
+      var itemResults = parallelResults[1];
 
       return list.map(function (a, idx) {
         var deadline =
@@ -274,7 +286,7 @@
     ).trim();
   }
 
-  async function fetchQuizzesForCourse(course) {
+  async function fetchQuizzesForCourse(course, sitePagesCache) {
     try {
       var data = await sakaiGet("/direct/sam_pub/context/" + course.id + ".json");
       var list = data.sam_pub_collection || [];
@@ -285,7 +297,7 @@
       });
       var fallbackToolUrl = null;
       if (list.some(function (q) { return !getQuizAlias(q); })) {
-        fallbackToolUrl = await fetchSiteToolUrl(course.id, "sakai.samigo");
+        fallbackToolUrl = await fetchSiteToolUrl(course.id, "sakai.samigo", sitePagesCache);
       }
       return list.map(function (q) {
         var deadline = extractTimestamp(q.dueDate);
@@ -314,36 +326,56 @@
     }
   }
 
-  async function fetchAllAssignments(onProgress) {
+  async function fetchAllAssignments(onCourseComplete, onCoursesLoaded) {
     var courses = await getCourses();
     if (courses.length === 0) throw new Error("コース一覧を取得できませんでした");
+    if (onCoursesLoaded) onCoursesLoaded(courses);
 
     var allAssignments = [];
     var completed = 0;
+    var nextCourseIndex = 0;
+    var fatalError = null;
+    var sitePagesCache = new Map();
 
-    for (var i = 0; i < courses.length; i += CONCURRENT_LIMIT) {
-      var batch = courses.slice(i, i + CONCURRENT_LIMIT);
-      var results = await Promise.allSettled(
-        batch.flatMap(function (c) {
-          return [
-            fetchAssignmentsForCourse(c),
-            fetchQuizzesForCourse(c)
-          ];
-        })
-      );
-      for (var ri = 0; ri < results.length; ri++) {
-        if (results[ri].status === "rejected" && results[ri].reason && results[ri].reason.loggedOut) {
-          throw results[ri].reason;
+    async function worker() {
+      while (!fatalError) {
+        var courseIndex = nextCourseIndex++;
+        if (courseIndex >= courses.length) return;
+
+        var course = courses[courseIndex];
+        var results = await Promise.allSettled([
+          fetchAssignmentsForCourse(course, sitePagesCache),
+          fetchQuizzesForCourse(course, sitePagesCache)
+        ]);
+
+        for (var ri = 0; ri < results.length; ri++) {
+          if (results[ri].status === "rejected" && results[ri].reason && results[ri].reason.loggedOut) {
+            fatalError = results[ri].reason;
+            return;
+          }
+        }
+
+        if (fatalError) return;
+
+        var courseAssignments = [];
+        results.forEach(function (result) {
+          if (result.status === "fulfilled") {
+            courseAssignments.push.apply(courseAssignments, result.value);
+          }
+        });
+        allAssignments.push.apply(allAssignments, courseAssignments);
+        completed++;
+        if (onCourseComplete) {
+          onCourseComplete(course, courseAssignments, completed, courses.length);
         }
       }
-      results.forEach(function (r) {
-        if (r.status === "fulfilled") {
-          allAssignments.push.apply(allAssignments, r.value);
-        }
-      });
-      completed += batch.length;
-      if (onProgress) onProgress(completed, courses.length);
     }
+
+    var workerCount = Math.min(CONCURRENT_LIMIT, courses.length);
+    var workers = [];
+    for (var wi = 0; wi < workerCount; wi++) workers.push(worker());
+    await Promise.all(workers);
+    if (fatalError) throw fatalError;
 
     return allAssignments;
   }
@@ -449,9 +481,27 @@
     }
   }
 
-  function shouldPreserveOnLargeDrop(nextAssignments) {
+  function groupAssignmentsByCourse(assignments) {
+    var grouped = new Map();
+    (assignments || []).forEach(function (assignment) {
+      var courseId = String(assignment.courseId || "");
+      if (!grouped.has(courseId)) grouped.set(courseId, []);
+      grouped.get(courseId).push(assignment);
+    });
+    return grouped;
+  }
+
+  function flattenCourseAssignments(grouped) {
+    var assignments = [];
+    grouped.forEach(function (courseAssignments) {
+      assignments.push.apply(assignments, courseAssignments);
+    });
+    return assignments;
+  }
+
+  function shouldPreserveOnLargeDrop(nextAssignments, previousAssignments) {
     if (!Array.isArray(nextAssignments)) return false;
-    var prevCount = Array.isArray(lastAssignments) ? lastAssignments.length : 0;
+    var prevCount = Array.isArray(previousAssignments) ? previousAssignments.length : 0;
     var nextCount = nextAssignments.length;
     if (prevCount < DROP_GUARD_MIN_PREVIOUS) return false;
     return nextCount < Math.floor(prevCount * DROP_GUARD_RATIO);
@@ -573,6 +623,9 @@
   async function loadAssignments(forceRefresh) {
     if (isLoading) return;
     isLoading = true;
+    var baselineAssignments = Array.isArray(lastAssignments) ? lastAssignments.slice() : [];
+    var progressByCourse = groupAssignmentsByCourse(baselineAssignments);
+    var progressAssignments = baselineAssignments.slice();
 
     try {
       if (!forceRefresh) {
@@ -588,7 +641,22 @@
         throw LoggedOutError();
       }
 
-      var assignments = await fetchAllAssignments();
+      var assignments = await fetchAllAssignments(function (course, courseAssignments, completed, total) {
+        progressByCourse.set(String(course.id || ""), courseAssignments);
+        progressAssignments = flattenCourseAssignments(progressByCourse);
+
+        // Final publication follows the existing empty/drop guards and cache write.
+        // Avoid flashing an empty panel while the first successful courses have no tasks.
+        if (completed < total && progressAssignments.length > 0) {
+          publishAssignments(progressAssignments);
+        }
+      }, function (courses) {
+        var activeCourseIds = new Set(courses.map(function (course) { return String(course.id || ""); }));
+        progressByCourse.forEach(function (_courseAssignments, courseId) {
+          if (!activeCourseIds.has(courseId)) progressByCourse.delete(courseId);
+        });
+        progressAssignments = flattenCourseAssignments(progressByCourse);
+      });
 
       // kulms-extension と同様に「既存状態を壊さない」方針を優先する。
       // 内部的な一時失敗で 0 件になる場合は、既存キャッシュを維持する。
@@ -601,22 +669,22 @@
           return;
         }
 
-        if (lastAssignments && lastAssignments.length > 0) {
+        if (baselineAssignments.length > 0) {
           console.warn("[Comfortable KULMS] empty fetch result; preserving in-memory assignments");
-          publishAssignments(lastAssignments);
+          publishAssignments(baselineAssignments);
           isLoading = false;
           return;
         }
       }
 
-      if (shouldPreserveOnLargeDrop(assignments)) {
+      if (shouldPreserveOnLargeDrop(assignments, baselineAssignments)) {
         console.warn(
           "[Comfortable KULMS] suspicious assignment count drop detected; preserving previous state",
-          lastAssignments.length,
+          baselineAssignments.length,
           "->",
           assignments.length
         );
-        publishAssignments(lastAssignments);
+        publishAssignments(baselineAssignments);
         isLoading = false;
         return;
       }
@@ -633,8 +701,8 @@
 
       if (stale && stale.assignments && stale.assignments.length > 0) {
         publishAssignments(stale.assignments);
-      } else if (lastAssignments && lastAssignments.length > 0) {
-        publishAssignments(lastAssignments);
+      } else if (baselineAssignments.length > 0) {
+        publishAssignments(baselineAssignments);
       } else {
         publishAssignments([]);
       }
